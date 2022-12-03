@@ -129,7 +129,8 @@ bwt_df =
     babysex = ifelse(babysex == 1, "Male", "Female"),
     babysex = as.factor(babysex),
     malform = ifelse(malform == 1, "present", "absent"),
-    malform = as.factor(malform)) 
+    malform = as.factor(malform),
+    delwt = delwt * 453.592) # I want to convert pounds to grams
 
 # I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
 ```
@@ -139,7 +140,44 @@ bwt_df =
 Outcome of interest: `bwt` (baby’s birthweight - grams)
 
 Predictors of interest:  
-\* `delwt` (mother’s weight at delivery - pounds)  
-\* `fincome` (family monthly income - in hundreds, rounded)  
+\* `delwt` (mother’s weight at delivery - grams)  
 \* `gaweeks` (gestational age in weeks)  
 \* `momage` (mother’s age at delivery - years)
+
+Because the outcome of interest and all the predictors of interest are
+continuous variables, I plan to use linear regression to determine the
+the relationship between the predictors of interest and baby
+birthweight.
+
+Proposed linear regression model:
+
+Birthweight = intercept + beta1(`delwt`) + beta2(`gaweeks`) +
+beta3(`momage`)
+
+``` r
+hypo_df = 
+  bwt_df %>% 
+  select(bwt, delwt, gaweeks, momage)
+
+linear_model = 
+  hypo_df %>% 
+  lm(bwt ~ delwt + gaweeks + momage, data = .)
+
+hypo_resid = 
+  hypo_df %>% 
+  mutate(
+  add_residuals(hypo_df, linear_model),
+  add_predictions(hypo_df, linear_model))
+```
+
+``` r
+hypo_resid %>% 
+ggplot(aes(x = pred, y = resid)) +
+  geom_point() +
+  labs(
+    title = 'Residual vs. Predicted Values Plot', 
+    x = 'Predicted Values', 
+    y = 'Residuals')
+```
+
+![](HW6_files/figure-gfm/residual%20plot-1.png)<!-- -->
