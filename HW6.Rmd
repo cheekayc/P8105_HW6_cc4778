@@ -91,10 +91,11 @@ all_cities %>%
     geom_point(size = 1.5, color = "orange") +
     theme_bw()+
     theme(panel.grid.minor = element_blank()) +
-    ylab("City, State") +
-    xlab("Odds ratio") +
-    ggtitle("Odds ratio comparing homicide resolved among male to female in each city")
-  
+  labs(
+    y = "City, State",
+    x = "Odds ratio",
+    title = "Odds ratio comparing homicide resolved among male to female in each city",
+    caption = "data source: Washington Post")
 ```
 
 
@@ -158,6 +159,25 @@ ggplot(aes(x = pred, y = resid)) +
     y = 'Residuals')
 ```
 
+#### Compare the model with...
+
+1. Length at birth and gestational age as predictors (main effects only)
+
+```{r length and gest}
+length_gest = 
+  bwt_df %>% 
+  select(bwt, blength, gaweeks)
+
+linear_model = 
+  hypo_df %>% 
+  lm(bwt ~ delwt + gaweeks + momage, data = .)
+
+hypo_resid = 
+  hypo_df %>% 
+  mutate(
+  add_residuals(hypo_df, linear_model),
+  add_predictions(hypo_df, linear_model))
+```
 
 
 
