@@ -116,3 +116,30 @@ all_cities %>%
 ```
 
 ![](HW6_files/figure-gfm/plot%20OR%20AND%20CIs-1.png)<!-- -->
+
+## Problem 3
+
+Load and clean the `birthweight` dataset:
+
+``` r
+bwt_df = 
+  read_csv("./Data/birthweight.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    babysex = ifelse(babysex == 1, "Male", "Female"),
+    babysex = as.factor(babysex),
+    malform = ifelse(malform == 1, "present", "absent"),
+    malform = as.factor(malform)) 
+
+# I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
+```
+
+##### Proposed regression model for birthweight
+
+Outcome of interest: `bwt` (baby’s birthweight - grams)
+
+Predictors of interest:  
+\* `delwt` (mother’s weight at delivery - pounds)  
+\* `fincome` (family monthly income - in hundreds, rounded)  
+\* `gaweeks` (gestational age in weeks)  
+\* `momage` (mother’s age at delivery - years)
