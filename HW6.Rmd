@@ -196,13 +196,19 @@ bwt_df =
     babysex = as.factor(babysex),
     malform = ifelse(malform == 1, "present", "absent"),
     malform = as.factor(malform),
-    delwt = delwt * 453.592) # I want to convert pounds to grams because I prefer standard scientific unit.
-
-# I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
+    # I did not label father's and mother's races because it is too much work...
+    frace = as.factor(frace),
+    mrace = as.factor(mrace),
+    # I want to convert pounds to grams because I prefer standard scientific unit. 
+    # Also, I did this to keep the unit of weight the same across the dataset.
+    delwt = delwt * 453.592) 
 
 skimr::skim(bwt_df)
+# No missing values across the dataset.
 ```
 
+The `bwt_df` dataset contains `r ncol(bwt_df)` variables and `r nrow(bwt_df)` observations. 4 of the variables 
+(`babysex`, `malform`, `frace`, and `mrace`)are factor vectors, while all other variables are numeric vectors.
 
 ##### Proposed regression model for birthweight
 
@@ -210,15 +216,26 @@ Outcome of interest:
 `bwt` (baby's birthweight - grams)
 
 Predictors of interest:                                                                                                                      
-* `delwt` (mother's weight at delivery - grams)
-* `fincome` (family monthly income - in hundreds, rounded)
-* `gaweeks` (gestational age in weeks)                                                                                                       
-* `momage` (mother’s age at delivery - years)
-
+* `delwt` (mother's weight at delivery - grams)                                                                                                                                                             
+  I picked this variable as one of the predictors because I think mother's weight at delivery could have some effect on baby's birthweight.
+  The heavier the mother's weight at delivery, the heavier the baby's birthweight.
+  
+* `fincome` (family monthly income - in hundreds, rounded)                                                                                                                                                  
+  Family income can reflect the mother's SES, which can serve as a social factor of babies birthweight.
+  The lower the family income of a mother, the lower the baby's birthweight.
+  
+* `gaweeks` (gestational age in weeks)                                                                                                                                                                    
+  I hypothesized that fewer gestational age results in lower baby birthweight.
+  
+* `momage` (mother’s age at delivery - years)                                                                                                                                                                
+  Several literature reviews suggest that baby birthweight is negatively associated with mother's age at delivery.
+  
 Proposed linear regression model:
 
 Birthweight = intercept + beta1(`delwt`) + beta2(`fincome`) + beta3(`gaweeks`) + beta4(`momage`)
 
+First, I created a dataset that only contains the variables that I need for my hypothetical model. Because both the outcome and predictors
+of interest are continuous variables, I used a linear regression for my hypothesized model.
 ```{r create hypothetical dataset}
 hypo_df = 
   bwt_df %>% 
@@ -235,6 +252,10 @@ hypo_model %>%
 summary(hypo_model)
 ```
 
+The adjusted $R^2$ for this hypothetical model is 0.24. About 24% of the variance in baby's birthweight can be explained by its
+linear relationship with the four selected variables.
+
+Then, I made a plot of model residuals against fitted values:
 ```{r residual plot}
 hypo_add = 
   hypo_df %>% 
@@ -253,6 +274,11 @@ ggplot(aes(x = pred, y = resid)) +
 
 
 #### Compare different models
+
+Compare my hypothesized model to two others:
+
+* One using length at birth and gestational age as predictors (main effects only)
+* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
 ```{r comparison}
 cv_df = 
@@ -285,6 +311,10 @@ cv_df %>%
     title = "Violin plot of RMSE comparing 3 models")
 ```
 
+From the Violin plot above, we can see that the interaction model has the lowest RMSE value among the three models, whereas my hypothesized model
+has the highest RMSE value. In conclusion, the interaction model is the best model to be used as compared to the other two models. 
+
+I also created a neat table to show the mean RMSE of the three models:
 ```{r mean rmse}
 cv_df %>% 
   select(starts_with("rmse")) %>% 

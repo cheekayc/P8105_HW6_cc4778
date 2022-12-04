@@ -196,7 +196,7 @@ all_cities =
     CI_upper = exp(estimate + 1.96 * std.error))
 
 all_cities %>% 
-  select(city_state, term, OR, CI_lower, CI_upper) %>% 
+  select(city_state, term, OR, CI_lower, CI_upper) %>%
   knitr::kable(digits = 2)
 ```
 
@@ -286,9 +286,12 @@ bwt_df =
     babysex = as.factor(babysex),
     malform = ifelse(malform == 1, "present", "absent"),
     malform = as.factor(malform),
-    delwt = delwt * 453.592) # I want to convert pounds to grams because I prefer standard scientific unit.
-
-# I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
+    # I did not label father's and mother's races because it is too much work...
+    frace = as.factor(frace),
+    mrace = as.factor(mrace),
+    # I want to convert pounds to grams because I prefer standard scientific unit. 
+    # Also, I did this to keep the unit of weight the same across the dataset.
+    delwt = delwt * 453.592) 
 
 skimr::skim(bwt_df)
 ```
@@ -300,8 +303,8 @@ skimr::skim(bwt_df)
 | Number of columns                                | 20     |
 | \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_   |        |
 | Column type frequency:                           |        |
-| factor                                           | 2      |
-| numeric                                          | 18     |
+| factor                                           | 4      |
+| numeric                                          | 16     |
 | \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ |        |
 | Group variables                                  | None   |
 
@@ -309,10 +312,12 @@ Data summary
 
 **Variable type: factor**
 
-| skim_variable | n_missing | complete_rate | ordered | n_unique | top_counts           |
-|:--------------|----------:|--------------:|:--------|---------:|:---------------------|
-| babysex       |         0 |             1 | FALSE   |        2 | Mal: 2230, Fem: 2112 |
-| malform       |         0 |             1 | FALSE   |        2 | abs: 4327, pre: 15   |
+| skim_variable | n_missing | complete_rate | ordered | n_unique | top_counts                      |
+|:--------------|----------:|--------------:|:--------|---------:|:--------------------------------|
+| babysex       |         0 |             1 | FALSE   |        2 | Mal: 2230, Fem: 2112            |
+| frace         |         0 |             1 | FALSE   |        5 | 1: 2123, 2: 1911, 4: 248, 3: 46 |
+| malform       |         0 |             1 | FALSE   |        2 | abs: 4327, pre: 15              |
+| mrace         |         0 |             1 | FALSE   |        4 | 1: 2147, 2: 1909, 4: 243, 3: 43 |
 
 **Variable type: numeric**
 
@@ -323,12 +328,10 @@ Data summary
 | bwt           |         0 |             1 |  3114.40 |   512.15 |   595.00 |  2807.00 |  3132.50 |  3459.00 |   4791.0 | ▁▁▇▇▁ |
 | delwt         |         0 |             1 | 66030.33 | 10073.29 | 39008.91 | 59420.55 | 64863.66 | 71213.94 | 151499.7 | ▅▇▁▁▁ |
 | fincome       |         0 |             1 |    44.11 |    25.98 |     0.00 |    25.00 |    35.00 |    65.00 |     96.0 | ▃▇▅▂▃ |
-| frace         |         0 |             1 |     1.66 |     0.85 |     1.00 |     1.00 |     2.00 |     2.00 |      8.0 | ▇▁▁▁▁ |
 | gaweeks       |         0 |             1 |    39.43 |     3.15 |    17.70 |    38.30 |    39.90 |    41.10 |     51.3 | ▁▁▂▇▁ |
 | menarche      |         0 |             1 |    12.51 |     1.48 |     0.00 |    12.00 |    12.00 |    13.00 |     19.0 | ▁▁▂▇▁ |
 | mheight       |         0 |             1 |    63.49 |     2.66 |    48.00 |    62.00 |    63.00 |    65.00 |     77.0 | ▁▁▇▂▁ |
 | momage        |         0 |             1 |    20.30 |     3.88 |    12.00 |    18.00 |    20.00 |    22.00 |     44.0 | ▅▇▂▁▁ |
-| mrace         |         0 |             1 |     1.63 |     0.77 |     1.00 |     1.00 |     2.00 |     2.00 |      4.0 | ▇▇▁▁▁ |
 | parity        |         0 |             1 |     0.00 |     0.10 |     0.00 |     0.00 |     0.00 |     0.00 |      6.0 | ▇▁▁▁▁ |
 | pnumlbw       |         0 |             1 |     0.00 |     0.00 |     0.00 |     0.00 |     0.00 |     0.00 |      0.0 | ▁▁▇▁▁ |
 | pnumsga       |         0 |             1 |     0.00 |     0.00 |     0.00 |     0.00 |     0.00 |     0.00 |      0.0 | ▁▁▇▁▁ |
@@ -337,20 +340,47 @@ Data summary
 | smoken        |         0 |             1 |     4.15 |     7.41 |     0.00 |     0.00 |     0.00 |     5.00 |     60.0 | ▇▁▁▁▁ |
 | wtgain        |         0 |             1 |    22.08 |    10.94 |   -46.00 |    15.00 |    22.00 |    28.00 |     89.0 | ▁▁▇▁▁ |
 
+``` r
+# No missing values across the dataset.
+```
+
+The `bwt_df` dataset contains 20 variables and 4342 observations. 4 of
+the variables (`babysex`, `malform`, `frace`, and `mrace`)are factor
+vectors, while all other variables are numeric vectors.
+
 ##### Proposed regression model for birthweight
 
 Outcome of interest: `bwt` (baby’s birthweight - grams)
 
 Predictors of interest:  
-\* `delwt` (mother’s weight at delivery - grams) \* `fincome` (family
-monthly income - in hundreds, rounded) \* `gaweeks` (gestational age in
-weeks)  
-\* `momage` (mother’s age at delivery - years)
+\* `delwt` (mother’s weight at delivery - grams)  
+I picked this variable as one of the predictors because I think mother’s
+weight at delivery could have some effect on baby’s birthweight. The
+heavier the mother’s weight at delivery, the heavier the baby’s
+birthweight.
+
+- `fincome` (family monthly income - in hundreds, rounded)  
+  Family income can reflect the mother’s SES, which can serve as a
+  social factor of babies birthweight. The lower the family income of a
+  mother, the lower the baby’s birthweight.
+
+- `gaweeks` (gestational age in weeks)  
+  I hypothesized that fewer gestational age results in lower baby
+  birthweight.
+
+- `momage` (mother’s age at delivery - years)  
+  Several literature reviews suggest that baby birthweight is negatively
+  associated with mother’s age at delivery.
 
 Proposed linear regression model:
 
 Birthweight = intercept + beta1(`delwt`) + beta2(`fincome`) +
 beta3(`gaweeks`) + beta4(`momage`)
+
+First, I created a dataset that only contains the variables that I need
+for my hypothetical model. Because both the outcome and predictors of
+interest are continuous variables, I used a linear regression for my
+hypothesized model.
 
 ``` r
 hypo_df = 
@@ -400,6 +430,12 @@ summary(hypo_model)
     ## Multiple R-squared:   0.24,  Adjusted R-squared:  0.2393 
     ## F-statistic: 342.3 on 4 and 4337 DF,  p-value: < 2.2e-16
 
+The adjusted $R^2$ for this hypothetical model is 0.24. About 24% of the
+variance in baby’s birthweight can be explained by its linear
+relationship with the four selected variables.
+
+Then, I made a plot of model residuals against fitted values:
+
 ``` r
 hypo_add = 
   hypo_df %>% 
@@ -419,6 +455,13 @@ ggplot(aes(x = pred, y = resid)) +
 ![](HW6_files/figure-gfm/residual%20plot-1.png)<!-- -->
 
 #### Compare different models
+
+Compare my hypothesized model to two others:
+
+- One using length at birth and gestational age as predictors (main
+  effects only)
+- One using head circumference, length, sex, and all interactions
+  (including the three-way interaction) between these
 
 ``` r
 cv_df = 
@@ -453,6 +496,13 @@ cv_df %>%
 
 ![](HW6_files/figure-gfm/comparison-1.png)<!-- -->
 
+From the Violin plot above, we can see that the interaction model has
+the lowest RMSE value among the three models, whereas my hypothesized
+model has the highest RMSE value. In conclusion, the interaction model
+is the best model to be used as compared to the other two models.
+
+I also created a neat table to show the mean RMSE of the three models:
+
 ``` r
 cv_df %>% 
   select(starts_with("rmse")) %>% 
@@ -470,6 +520,6 @@ cv_df %>%
 
 | model        | mean_rmse |
 |:-------------|----------:|
-| hypothetical |    448.06 |
-| interaction  |    289.23 |
-| main_effect  |    334.56 |
+| hypothetical |    447.74 |
+| interaction  |    290.57 |
+| main_effect  |    335.70 |
