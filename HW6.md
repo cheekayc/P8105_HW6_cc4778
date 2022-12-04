@@ -24,6 +24,79 @@ Chee Kay Cheong
     ## 
     ## This is mgcv 1.8-40. For overview type 'help("mgcv-package")'.
 
+## Problem 1
+
+To obtain a distribution for $\hat{r}^2$, we’ll follow basically the
+same procedure we used for regression coefficients: draw bootstrap
+samples; then a model to each; extract the value I’m concerned with; and
+summarize. Here, we’ll use `modelr::bootstrap` to draw the samples and
+`broom::glance` to produce `r.squared` values.
+
+``` r
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+``` r
+weather_df %>% 
+  modelr::bootstrap(n = 1000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::glance)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  ggplot(aes(x = r.squared)) + geom_density()
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+
+In this example, the $\hat{r}^2$ value is high, and the upper bound at 1
+may be a cause for the generally skewed shape of the distribution. If we
+wanted to construct a confidence interval for $R^2$, we could take the
+2.5% and 97.5% quantiles of the estimates across bootstrap samples.
+However, because the shape isn’t symmetric, using the mean +/- 1.96
+times the standard error probably wouldn’t work well.
+
+We can produce a distribution for $\log(\beta_0 * \beta1)$ using a
+similar approach, with a bit more wrangling before we make our plot.
+
+``` r
+weather_df %>% 
+  modelr::bootstrap(n = 1000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  select(id = `.id`, term, estimate) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  rename(beta0 = `(Intercept)`, beta1 = tmin) %>% 
+  mutate(log_b0b1 = log(beta0 * beta1)) %>% 
+  ggplot(aes(x = log_b0b1)) + geom_density()
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+As with $r^2$, this distribution is somewhat skewed and has some
+outliers.
+
+The point of this is not to say you should always use the bootstrap –
+it’s possible to establish “large sample” distributions for strange
+parameters / values / summaries in a lot of cases, and those are great
+to have. But it is helpful to know that there’s a way to do inference
+even in tough cases.
+
 ## Problem 2
 
 Load and clean the `homicide` dataset:
@@ -33,19 +106,30 @@ homicide =
   read_csv("./Data/homicide_data.csv") %>% 
   janitor::clean_names() %>% 
   mutate(
+  # I didn't drop any missing values, but I converted all "Unknown" in these three columns to real 'NA' that is recognized by R.
     across(c(victim_age, victim_sex, victim_race), na_if, "Unknown")) %>% 
   mutate(
     victim_age = as.numeric(victim_age),
     reported_date = as.character(reported_date),
     reported_date = as.Date(reported_date, format = "%Y%m%d"),
     state = str_replace(state, "w", "W"),
-    case_solved = ifelse(disposition == "Closed by arrest", 1, 0)) %>%
+    case_solved = ifelse(disposition == "Closed by arrest", 1, 0),
+    case_solved = as.factor(case_solved)) %>%
   unite(col = 'city_state', c('city', 'state'), sep = ', ') %>% 
   subset(!city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")) %>% 
   subset(victim_race %in% c("White", "Black"))
 ```
 
+I created a new variable named `case_solved` in which if any cases were
+“*Open/No arrest*” or “*closed without arrest*” it will be coded as `0`,
+while if any cases were “*Closed by arrest*” it will be coded as `1`.
+
+`1` means resolved, whereas `0` means unresolved.
+
 ##### Baltimore, MD
+
+I would like to create a smaller dataset named `baltimore` which
+contains only information about the city of Baltimore, MD.
 
 ``` r
 baltimore = 
@@ -53,9 +137,14 @@ baltimore =
   filter(
     city_state == "Baltimore, MD") %>%
   mutate(
+  # I releveled the victim's race, so that "White" becomes the reference group.
     victim_race = fct_relevel(victim_race, "White")) %>% 
   select(case_solved, victim_age, victim_sex, victim_race)
 ```
+
+Then, I would fit a logistic regression to obtain the adjusted odds
+ratio for solving homicides comparing male victims to female victims,
+keeping all other variables fixed.
 
 ``` r
 logreg_balti = 
@@ -68,18 +157,26 @@ logreg_balti =
     CI_upper = exp(estimate + 1.96 * std.error))
 
 logreg_balti %>% 
-  select(-std.error, -statistic) %>% 
+  select(term, OR, CI_lower, CI_upper) %>% 
+  filter(term == "victim_sexMale") %>% 
   knitr::kable(digits = 2)
 ```
 
-| term             | estimate | p.value |   OR | CI_lower | CI_upper |
-|:-----------------|---------:|--------:|-----:|---------:|---------:|
-| (Intercept)      |     1.15 |    0.00 | 3.16 |     1.99 |     5.03 |
-| victim_age       |    -0.01 |    0.04 | 0.99 |     0.99 |     1.00 |
-| victim_sexMale   |    -0.85 |    0.00 | 0.43 |     0.32 |     0.56 |
-| victim_raceBlack |    -0.84 |    0.00 | 0.43 |     0.31 |     0.61 |
+| term           |   OR | CI_lower | CI_upper |
+|:---------------|-----:|---------:|---------:|
+| victim_sexMale | 0.43 |     0.32 |     0.56 |
+
+The adjusted odds ratio for solving homicides comparing male victims to
+female victims is 0.43, and the adjusted 95% confidence interval is 0.32
+to 0.56. In Baltimore, MD, the odds of solving homicides among males is
+57% lower than the odds of solving homicides among females, and we are
+95% confident that the true odds ratio lies between 0.32 and 0.56.
 
 ##### All cities
+
+Next, I fitted a logistic regression model for each of the cities in the
+`homicide` dataset and extract the adjusted odds ratio and 95% CI for
+solving homicides comparing male victims to female victims.
 
 ``` r
 all_cities = 
@@ -97,7 +194,64 @@ all_cities =
     OR = exp(estimate),
     CI_lower = exp(estimate - 1.96 * std.error),
     CI_upper = exp(estimate + 1.96 * std.error))
+
+all_cities %>% 
+  select(city_state, term, OR, CI_lower, CI_upper) %>% 
+  knitr::kable(digits = 2)
 ```
+
+| city_state         | term           |   OR | CI_lower | CI_upper |
+|:-------------------|:---------------|-----:|---------:|---------:|
+| Albuquerque, NM    | victim_sexMale | 1.77 |     0.83 |     3.76 |
+| Atlanta, GA        | victim_sexMale | 1.00 |     0.68 |     1.46 |
+| Baltimore, MD      | victim_sexMale | 0.43 |     0.32 |     0.56 |
+| Baton Rouge, LA    | victim_sexMale | 0.38 |     0.21 |     0.70 |
+| Birmingham, AL     | victim_sexMale | 0.87 |     0.57 |     1.32 |
+| Boston, MA         | victim_sexMale | 0.67 |     0.35 |     1.26 |
+| Buffalo, NY        | victim_sexMale | 0.52 |     0.29 |     0.94 |
+| Charlotte, NC      | victim_sexMale | 0.88 |     0.56 |     1.40 |
+| Chicago, IL        | victim_sexMale | 0.41 |     0.34 |     0.50 |
+| Cincinnati, OH     | victim_sexMale | 0.40 |     0.24 |     0.68 |
+| Columbus, OH       | victim_sexMale | 0.53 |     0.38 |     0.75 |
+| Denver, CO         | victim_sexMale | 0.48 |     0.24 |     0.97 |
+| Detroit, MI        | victim_sexMale | 0.58 |     0.46 |     0.73 |
+| Durham, NC         | victim_sexMale | 0.81 |     0.39 |     1.68 |
+| Fort Worth, TX     | victim_sexMale | 0.67 |     0.40 |     1.13 |
+| Fresno, CA         | victim_sexMale | 1.34 |     0.58 |     3.07 |
+| Houston, TX        | victim_sexMale | 0.71 |     0.56 |     0.91 |
+| Indianapolis, IN   | victim_sexMale | 0.92 |     0.68 |     1.24 |
+| Jacksonville, FL   | victim_sexMale | 0.72 |     0.54 |     0.97 |
+| Las Vegas, NV      | victim_sexMale | 0.84 |     0.61 |     1.15 |
+| Long Beach, CA     | victim_sexMale | 0.41 |     0.16 |     1.08 |
+| Los Angeles, CA    | victim_sexMale | 0.66 |     0.46 |     0.96 |
+| Louisville, KY     | victim_sexMale | 0.49 |     0.30 |     0.79 |
+| Memphis, TN        | victim_sexMale | 0.72 |     0.53 |     0.99 |
+| Miami, FL          | victim_sexMale | 0.52 |     0.30 |     0.87 |
+| Milwaukee, WI      | victim_sexMale | 0.73 |     0.50 |     1.06 |
+| Minneapolis, MN    | victim_sexMale | 0.95 |     0.48 |     1.87 |
+| Nashville, TN      | victim_sexMale | 1.03 |     0.68 |     1.56 |
+| New Orleans, LA    | victim_sexMale | 0.58 |     0.42 |     0.81 |
+| New York, NY       | victim_sexMale | 0.26 |     0.14 |     0.50 |
+| Oakland, CA        | victim_sexMale | 0.56 |     0.37 |     0.87 |
+| Oklahoma City, OK  | victim_sexMale | 0.97 |     0.62 |     1.52 |
+| Omaha, NE          | victim_sexMale | 0.38 |     0.20 |     0.72 |
+| Philadelphia, PA   | victim_sexMale | 0.50 |     0.38 |     0.65 |
+| Pittsburgh, PA     | victim_sexMale | 0.43 |     0.27 |     0.70 |
+| Richmond, VA       | victim_sexMale | 1.01 |     0.50 |     2.03 |
+| San Antonio, TX    | victim_sexMale | 0.70 |     0.40 |     1.25 |
+| Sacramento, CA     | victim_sexMale | 0.67 |     0.33 |     1.34 |
+| Savannah, GA       | victim_sexMale | 0.87 |     0.42 |     1.78 |
+| San Bernardino, CA | victim_sexMale | 0.50 |     0.17 |     1.46 |
+| San Diego, CA      | victim_sexMale | 0.41 |     0.20 |     0.85 |
+| San Francisco, CA  | victim_sexMale | 0.61 |     0.32 |     1.17 |
+| St. Louis, MO      | victim_sexMale | 0.70 |     0.53 |     0.93 |
+| Stockton, CA       | victim_sexMale | 1.35 |     0.62 |     2.94 |
+| Tampa, FL          | victim_sexMale | 0.81 |     0.35 |     1.88 |
+| Tulsa, OK          | victim_sexMale | 0.98 |     0.61 |     1.55 |
+| Washington, DC     | victim_sexMale | 0.69 |     0.47 |     1.02 |
+
+Then, I created a plot that shows the estimated ORs and CIs for each
+city.
 
 ``` r
 all_cities %>% 
@@ -316,6 +470,6 @@ cv_df %>%
 
 | model        | mean_rmse |
 |:-------------|----------:|
-| hypothetical |    446.15 |
-| interaction  |    289.14 |
-| main_effect  |    333.01 |
+| hypothetical |    448.06 |
+| interaction  |    289.23 |
+| main_effect  |    334.56 |
