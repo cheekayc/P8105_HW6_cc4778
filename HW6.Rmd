@@ -111,7 +111,7 @@ bwt_df =
     babysex = as.factor(babysex),
     malform = ifelse(malform == 1, "present", "absent"),
     malform = as.factor(malform),
-    delwt = delwt * 453.592) # I want to convert pounds to grams
+    delwt = delwt * 453.592) # I want to convert pounds to grams because I prefer standard scientific unit.
 
 # I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
 ```
@@ -122,35 +122,39 @@ Outcome of interest:
 `bwt` (baby's birthweight - grams)
 
 Predictors of interest:                                                                                                                      
-* `delwt` (mother's weight at delivery - grams)                                                                                             
+* `delwt` (mother's weight at delivery - grams)
+* `fincome` (family monthly income - in hundreds, rounded)
 * `gaweeks` (gestational age in weeks)                                                                                                       
 * `momage` (mother’s age at delivery - years)
 
-Because the outcome of interest and all the predictors of interest are continuous variables, I plan to use linear regression
-to determine the the relationship between the predictors of interest and baby birthweight.
-
 Proposed linear regression model:
 
-Birthweight = intercept + beta1(`delwt`) + beta2(`gaweeks`) + beta3(`momage`)
+Birthweight = intercept + beta1(`delwt`) + beta2(`fincome`) + beta3(`gaweeks`) + beta4(`momage`)
 
 ```{r create hypothetical dataset}
 hypo_df = 
   bwt_df %>% 
-  select(bwt, delwt, gaweeks, momage)
+  select(bwt, delwt, fincome, gaweeks, momage)
 
-linear_model = 
+hypo_model = 
   hypo_df %>% 
-  lm(bwt ~ delwt + gaweeks + momage, data = .)
+  lm(bwt ~ delwt + fincome + gaweeks + momage, data = .)
 
-hypo_resid = 
-  hypo_df %>% 
-  mutate(
-  add_residuals(hypo_df, linear_model),
-  add_predictions(hypo_df, linear_model))
+hypo_model %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 2)
+
+summary(hypo_model)
 ```
 
 ```{r residual plot}
-hypo_resid %>% 
+hypo_add = 
+  hypo_df %>% 
+  mutate(
+  add_residuals(hypo_df, hypo_model),
+  add_predictions(hypo_df, hypo_model))
+
+hypo_add %>% 
 ggplot(aes(x = pred, y = resid)) +
   geom_point() +
   labs(
@@ -159,25 +163,40 @@ ggplot(aes(x = pred, y = resid)) +
     y = 'Residuals')
 ```
 
-#### Compare the model with...
 
-1. Length at birth and gestational age as predictors (main effects only)
+#### Compare different models
 
-```{r length and gest}
-length_gest = 
-  bwt_df %>% 
-  select(bwt, blength, gaweeks)
-
-linear_model = 
-  hypo_df %>% 
-  lm(bwt ~ delwt + gaweeks + momage, data = .)
-
-hypo_resid = 
-  hypo_df %>% 
+```{r comparison}
+cv_df = 
+  crossv_mc(bwt_df, 100) %>%
   mutate(
-  add_residuals(hypo_df, linear_model),
-  add_predictions(hypo_df, linear_model))
+    train = map(train, as.tibble),
+    test = map(test, as.tibble)) %>% 
+  mutate(
+    hypo_mod = map(.x = train, ~lm(bwt ~ delwt + fincome + gaweeks + momage, data = .x)), 
+    main_mod = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)), 
+    inter_mod = map(.x = train, ~lm(bwt ~ (bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex), data = .x))) %>% 
+  mutate(
+    rmse_hypothetical = map2_dbl(.x = hypo_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_main_effect = map2_dbl(.x = main_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_interaction = map2_dbl(.x = inter_mod, .y = test, ~rmse(model = .x, data = .y)))
+
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin() +
+  labs(
+    x = "model",
+    y = "rmse",
+    title = "Violin plot of RMSE comparing 3 models")
 ```
+
 
 
 
