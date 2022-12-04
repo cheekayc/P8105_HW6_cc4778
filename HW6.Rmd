@@ -114,7 +114,10 @@ bwt_df =
     delwt = delwt * 453.592) # I want to convert pounds to grams because I prefer standard scientific unit.
 
 # I did not change anything for father's & mother's race because I don't plan to use them in my regression model.
+
+skimr::skim(bwt_df)
 ```
+
 
 ##### Proposed regression model for birthweight
 
