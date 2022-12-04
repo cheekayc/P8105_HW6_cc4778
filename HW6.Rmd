@@ -102,7 +102,7 @@ all_cities %>%
 ## Problem 3
 
 Load and clean the `birthweight` dataset:
-```{r}
+```{r load and clean data}
 bwt_df = 
   read_csv("./Data/birthweight.csv") %>% 
   janitor::clean_names() %>% 
@@ -197,6 +197,20 @@ cv_df %>%
     title = "Violin plot of RMSE comparing 3 models")
 ```
 
+```{r mean rmse}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  group_by(model) %>% 
+  summarize(mean(rmse)) %>% 
+  mutate(mean_rmse = `mean(rmse)`) %>% 
+  select(-`mean(rmse)`) %>% 
+  knitr::kable(digits = 2)
+```
 
 
 
